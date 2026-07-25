@@ -1,0 +1,80 @@
+# Reference: <https://postmarketos.org/vendorkernel>
+# Kernel config based on: arch/arm64/configs/defconfig
+# Maintainer: Jianhua Lu <lujianhua000@gmail.com>
+
+_flavor="postmarketos-qcom-sm8250"
+pkgname=linux-$_flavor
+pkgver=6.17.0
+pkgrel=7
+pkgdesc="Mainline kernel fork for SM8250"
+arch="aarch64"
+_carch="arm64"
+url="https://gitlab.postmarketos.org/soc/qualcomm-sm8250/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	pmb:kconfigcheck-community
+"
+makedepends="
+	bash
+	bison
+	clang
+	findutils
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	postmarketos-installkernel
+	python3
+"
+
+# Source
+_tag="sm8250-$pkgver"
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_tag.tar.gz::https://gitlab.postmarketos.org/soc/qualcomm-sm8250/linux/-/archive/$_tag/linux-$_tag.tar.gz
+	$_config
+	0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch
+	0002-usb-typec-displayport-fix-signaling-rate-in-Configure.patch
+	0003-phy-qcom-qmp-combo-add-Type-C-mode-switch-for-4-lane-DP.patch
+	0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+"
+builddir="$srcdir/linux-$_tag"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/config-$_flavor.$arch" .config
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	make zinstall modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir/boot/dtbs"
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+77d6686275fd2aee878fb58986101b7e64a989bed8991da6cd9e0ad2437aaacfccdc6a155db97c281b127b73c3e3d8172039cd9bfb566de88cc9c540a99bf6f8  linux-postmarketos-qcom-sm8250-sm8250-6.17.0.tar.gz
+7a9dc75d9ec66c5c4586c4af0d5a458183a253479ff64903c8ceaccb5f3e69acfc6b3c502115bab0de3bfdbbbaf05578a61201821832c826c3e39758a634a978  config-postmarketos-qcom-sm8250.aarch64
+02f2f05aba070c873a067ae52f4770ee2d4b3a593e1d423ffabef97d023675d3e46496bd4ce6446bdd5cc07939f0a08cd9fbf37bac900b329cdda615bf29ec0e  0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch
+010264b044533482ec7824ec6a0346c0f5a4c8feb7076f75894bf0fd72a7c37396d4efc1b6ca09885b32ecff2f3582210ff02c728fe428219dfdd766a8a12492  0002-usb-typec-displayport-fix-signaling-rate-in-Configure.patch
+7ceeca992fb4f4e3faf47c442f35cf9216d53a798d0e4e8424c728f2b819abb5683789ee3bee7a3229c59a40d552edbf755fa20426d20035abba07483b6fc64c  0003-phy-qcom-qmp-combo-add-Type-C-mode-switch-for-4-lane-DP.patch
+100fdcc32ae6cab3912f37c19e981822d5c1e27f2ea6813026cbc6cfb961031a7b5cd51eca4464fade53d7dc1b59688ff40f0f304a67b6a2789cc16b51f1f2bb  0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+"

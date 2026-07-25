@@ -1,0 +1,2 @@
+# Re-apply swclock offset when rtc0 appears (covers late RTC probe).
+ACTION=="add", SUBSYSTEM=="rtc", KERNEL=="rtc0", RUN+="/usr/bin/swclock-offset-boot"

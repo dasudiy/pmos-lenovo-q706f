@@ -1,0 +1,18 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: mark volume-up as wakeup
+
+Allow the volume-up key to wake the tablet from s2idle, matching the
+hall sensor and power key wakeup sources already present on this board.
+
+---
+diff -Naur q706f-a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts q706f-b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+--- q706f-a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts	2026-07-24 08:27:19.190288406 +0800
++++ q706f-b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts	2026-07-24 08:27:19.208918350 +0800
+@@ -74,6 +74,7 @@
+ 			linux,code = <KEY_VOLUMEUP>;
+ 			gpios = <&pm8150_gpios 6 GPIO_ACTIVE_LOW>;
+ 			debounce-interval = <15>;
++			wakeup-source;
+ 		};
+ 	};
+ 

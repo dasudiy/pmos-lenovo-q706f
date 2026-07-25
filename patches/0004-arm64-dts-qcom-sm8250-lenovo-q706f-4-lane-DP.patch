@@ -1,0 +1,26 @@
+From: Asuka <asuka@localhost>
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: enable 4-lane DP Alt Mode
+
+Allow all four DP lanes on mdss_dp_out and register the QMP combo PHY as
+a Type-C mode-switch so pin assignment C can use a full 4-lane link
+(needed for 4K60).
+
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -892,7 +892,7 @@
+ };
+ 
+ &mdss_dp_out {
+-	data-lanes = <0 1>;
++	data-lanes = <0 1 2 3>;
+ 	remote-endpoint = <&usb_1_qmpphy_dp_in>;
+ };
+ 
+@@ -1608,6 +1608,7 @@
+ &usb_1_qmpphy {
+ 	status = "okay";
+ 
++	mode-switch;
+ 	vdda-phy-supply = <&vreg_l9a_1p2>;
+ 	vdda-pll-supply = <&vreg_l18a_0p92>;
+ };
