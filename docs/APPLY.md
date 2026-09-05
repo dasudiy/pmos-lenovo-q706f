@@ -10,7 +10,9 @@
 | `device-lenovo-q706f/*` | `device/testing/device-lenovo-q706f/` |
 | `firmware-lenovo-q706f/APKBUILD` | `device/testing/firmware-lenovo-q706f/APKBUILD` |
 
-Current kernel package reference: `linux-postmarketos-qcom-sm8250` **6.17.0-r10** (patches `0001`–`0006`).
+Current package references:
+- Kernel: `linux-postmarketos-qcom-sm8250` **6.17.0-r10** (patches `0001`–`0006`)
+- Device: `device-lenovo-q706f` **8-r3** (sleep audio pause: ExecStartPre + `q706f-audio-blank`)
 
 ## Checksums
 
@@ -58,8 +60,20 @@ On device, `apk add` runs `mkinitfs` / `boot-deploy` and flashes `boot_b`. Reboo
 uname -r
 # e.g. 6.17.0 #11-postmarketos-qcom-sm8250
 
-# suspend / sleep default
+# suspend / sleep default (s2idle only; no deep)
 cat /sys/power/mem_sleep
+apk info -e device-lenovo-q706f
+ls /usr/lib/device-lenovo-q706f/q706f-suspend-audio.sh \
+   /usr/lib/systemd/system/systemd-suspend.service.d/q706f-audio.conf \
+   /usr/lib/systemd/user/q706f-audio-blank.service \
+   /etc/xdg/autostart/q706f-audio-blank.desktop
+systemctl --user is-active q706f-audio-blank.service
+# MUST NOT exist (systemd 257 freezes user.slice before system-sleep scripts):
+ls /usr/lib/systemd/system-sleep/q706f-suspend-audio.sh 2>/dev/null || echo 'system-sleep hook absent (ok)'
+# play music → short power press: speakers silent, no looping chunk
+# short power / volume-up wake: audio resumes, not stuck muted
+# journal tag on full suspend:
+journalctl -b -t q706f-audio --no-pager
 
 # RTC + offset
 cat /sys/class/rtc/rtc0/since_epoch

@@ -10,7 +10,8 @@ These changes were developed and verified on a real Q706F with USB-C DisplayPort
 
 | Issue | Status |
 | --- | --- |
-| Cannot wake from sleep | Fixed (`s2idle` + volume-up wakeup) |
+| Cannot wake from sleep | Partial (`s2idle` + volume-up wakeup; folio HID resume still fails) |
+| Sleep loops music (“stuck tape”) | Fixed (device `pkgrel` ≥ 3: pause sink before freeze + on panel blank) |
 | Time resets to 1970 after reboot | Mitigated (RTC driver + swclock; HW RTC not writable) |
 | USB-C external display no signal | Fixed (Alt Mode + 4-lane DP) |
 | Only Dummy Output / no speakers | Fixed (CS35L45 + firmware symlink) |
@@ -46,6 +47,31 @@ Apply these files on top of [pmaports](https://gitlab.postmarketos.org/postmarke
   - `deviceinfo_kernel_cmdline` in `device-lenovo-q706f/deviceinfo`
 - DTS patch: mark volume-up as `wakeup-source`  
   - `patches/0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch`
+
+**Remaining:** folio keyboard/touchpad often fail i2c-HID resume (`failed to change power setting`, `-6`). Power / volume-up / hall still wake. True `deep` suspend-to-RAM is not advertised by this firmware (`/sys/power/mem_sleep` is only `[s2idle]`).
+
+#### Sleep loops music while the screen is black
+
+**Symptom:** Screen off or suspend with playback running: speakers repeat the last audio chunk (“stuck tape”). Putting `pactl` in `/usr/lib/systemd/system-sleep/` made this worse on systemd 257 (blocked ~30s after `user.slice` freeze, mute after wake, sometimes no wake).
+
+**Cause:**
+- Qualcomm DPCM DAI links set `ignore_suspend`, so LPASS DMA / CS35L45 keep the last period when userspace is frozen.
+- systemd **257** freezes `user.slice` **before** `system-sleep/` scripts.
+- GNOME blanks the panel (`idle-delay`) before or without full suspend.
+
+**Fix** (`device-lenovo-q706f` **pkgrel ≥ 3**):
+- Pause the default sink from `systemd-suspend.service` **ExecStartPre** (before freeze); unsuspend + unmute on **ExecStartPost**.
+- User service `q706f-audio-blank.service` pauses on panel DPMS Off / logind `PreparingForSleep`.
+- Do **not** install a `pactl` script under `/usr/lib/systemd/system-sleep/`.
+
+Files:
+- `device-lenovo-q706f/q706f-suspend-audio.sh`
+- `device-lenovo-q706f/q706f-suspend-audio.conf`
+- `device-lenovo-q706f/q706f-audio-blank.sh`
+- `device-lenovo-q706f/q706f-audio-blank.service`
+- `device-lenovo-q706f/q706f-audio-blank.desktop`
+
+**Verified:** play music, short power-button sleep: speakers silent while the panel is off; short power / volume-up wake restores audio (not stuck muted). Long-press is still a reboot. Folio HID resume is a separate remaining bug.
 
 ---
 
@@ -192,6 +218,12 @@ apk add --allow-untrusted linux-postmarketos-qcom-sm8250-*.apk \
   device-lenovo-q706f-*.apk firmware-lenovo-q706f-cirrus-*.apk
 ```
 
+Sleep-audio pause is in **`device-lenovo-q706f` 8-r3** (not the kernel). After `apk add`, enable/start the user unit if this is an existing install:
+
+```bash
+systemctl --user enable --now q706f-audio-blank.service
+```
+
 **Kernel-only update over USB networking (after a local build):**
 
 ```bash
@@ -207,6 +239,7 @@ scripts/install-kernel-ssh.sh
 - Hardware RTC is read-only (`RTC_SET_TIME` fails); rely on NTP + `swclock-offset`.
 - `CONFIG_BT_RFCOMM` is off in the community config → Bluetooth HFP / some classic profiles fail (`RFCOMM: Protocol not supported`).
 - Folio touchpad may log `i2c_hid` incorrect/incomplete reports (usually still usable).
+- Folio keyboard/touchpad may fail after suspend (`i2c_hid` power-setting `-6`); sleep is `s2idle` only (no `deep`).
 - Early `a650_sqe.fw` load warning then succeeds from an alternate path.
 
 ## Upstream
