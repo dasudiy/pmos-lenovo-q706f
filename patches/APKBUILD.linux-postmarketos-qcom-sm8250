@@ -5,7 +5,7 @@
 _flavor="postmarketos-qcom-sm8250"
 pkgname=linux-$_flavor
 pkgver=6.17.0
-pkgrel=7
+pkgrel=10
 pkgdesc="Mainline kernel fork for SM8250"
 arch="aarch64"
 _carch="arm64"
@@ -40,6 +40,8 @@ source="
 	0002-usb-typec-displayport-fix-signaling-rate-in-Configure.patch
 	0003-phy-qcom-qmp-combo-add-Type-C-mode-switch-for-4-lane-DP.patch
 	0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+	0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch
+	0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch
 "
 builddir="$srcdir/linux-$_tag"
 
@@ -77,4 +79,6 @@ sha512sums="
 010264b044533482ec7824ec6a0346c0f5a4c8feb7076f75894bf0fd72a7c37396d4efc1b6ca09885b32ecff2f3582210ff02c728fe428219dfdd766a8a12492  0002-usb-typec-displayport-fix-signaling-rate-in-Configure.patch
 7ceeca992fb4f4e3faf47c442f35cf9216d53a798d0e4e8424c728f2b819abb5683789ee3bee7a3229c59a40d552edbf755fa20426d20035abba07483b6fc64c  0003-phy-qcom-qmp-combo-add-Type-C-mode-switch-for-4-lane-DP.patch
 100fdcc32ae6cab3912f37c19e981822d5c1e27f2ea6813026cbc6cfb961031a7b5cd51eca4464fade53d7dc1b59688ff40f0f304a67b6a2789cc16b51f1f2bb  0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+ec5ab7065121386d55cf9a455b09a0ccbe5115248ab0dcdf9b1ec4222c425b00c58fcaf1ebddae13bcaf5924bf895d9c97d1a3b860c9a48704944eeb7467d4ae  0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch
+635373748212141eb94bb5848b4f01d768402b3edf0d4c7ae41c56ad5effaf4fbf54f13526b595558cab8586cd75c3f684b6fc7354ead4acb118b445729d3095  0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch
 "

@@ -15,6 +15,7 @@ These changes were developed and verified on a real Q706F with USB-C DisplayPort
 | USB-C external display no signal | Fixed (Alt Mode + 4-lane DP) |
 | Only Dummy Output / no speakers | Fixed (CS35L45 + firmware symlink) |
 | ~90s boot delay waiting for RTC | Fixed (bogus systemd device wait removed) |
+| Brightness slider glitches the panel | Fixed (kernel `pkgrel` ≥ 10: patches 0005 + 0006) |
 
 ## Repository layout
 
@@ -23,6 +24,7 @@ patches/                  Kernel patches + reference APKBUILD for linux-postmark
 kernel-config/            Extra Kconfig options and full config diff vs upstream pmaports
 device-lenovo-q706f/      Device package overlays (cmdline, swclock, deviceinfo, APKBUILD)
 firmware-lenovo-q706f/    Cirrus firmware package APKBUILD (shared wmfw symlinks)
+scripts/                  Build/install helpers (pmbootstrap + SSH APK install)
 docs/                     Extra notes
 ```
 
@@ -147,7 +149,25 @@ Late RTC probe (if any) is still handled by the udev rule.
 
 ---
 
-### 6. Migration: use community SM8250 kernel
+### 6. Panel glitches / black screen when changing brightness
+
+**Symptom:** Dragging the GNOME brightness slider (or writing sysfs backlight) produces garbled / flashing panel; prolonged dragging can end in a black screen while SSH still works.
+
+**Cause (two bugs):**
+1. **Panel driver:** `panel-samsung-amsa26zp01` rewrote WRCTRLD (`0x53`) on every backlight tick during live DSC video. Smooth dimming is already enabled once in the panel on-sequence (`0x53 = 0x28`).
+2. **MSM DSI host:** `msm_dsi_host_xfer_prepare()` unconditionally called `link_clk_set_rate()` on every runtime DCS write, re-locking the DSI PHY PLL mid-scanout. Kernel log shows `dsi_err_worker: status=5` (TIMEOUT | FIFO).
+
+**Fix:**
+- `patches/0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch` — stop per-tick `0x53` writes; skip redundant WRDISBV; guard when panel is not prepared.
+- `patches/0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch` — skip `link_clk_set_rate()` when the DSI link is already up (`msm_host->power_on`).
+
+**Note:** Do **not** set `MIPI_DSI_MODE_LPM` or toggle LPM around brightness on this video-mode DSC panel — that left the panel black on boot (r9).
+
+**Verified:** `linux-postmarketos-qcom-sm8250` **6.17.0-r10** (`#11-postmarketos-qcom-sm8250`); GNOME brightness slider smooth, no glitches, no `dsi_err_worker` in `dmesg`.
+
+---
+
+### 7. Migration: use community SM8250 kernel
 
 **Change:** `device-lenovo-q706f` depends on `linux-postmarketos-qcom-sm8250` instead of `linux-lenovo-q706f`.
 
@@ -157,11 +177,11 @@ Flash **boot + modules** together (or `apk upgrade` on-device so `mkinitfs` / `b
 
 ## How to apply (outline)
 
-1. Copy overlays into your pmaports tree (paths mirror upstream).
+1. Copy overlays into your pmaports tree (paths mirror upstream). See `docs/APPLY.md` for the file map.
 2. Merge `kernel-config/q706f-extra.config` into  
    `device/community/linux-postmarketos-qcom-sm8250/config-postmarketos-qcom-sm8250.aarch64`  
    (or apply `config-postmarketos-qcom-sm8250.aarch64.diff`).
-3. Bump `pkgrel`, refresh `sha512sums` (`pmbootstrap checksum …`).
+3. Copy `patches/000*.patch` and `patches/APKBUILD.linux-postmarketos-qcom-sm8250` into the kernel package dir; bump `pkgrel` and refresh `sha512sums` (`pmbootstrap checksum …`).
 4. Build and install:
 
 ```bash
@@ -170,6 +190,14 @@ pmbootstrap build --arch aarch64 device-lenovo-q706f firmware-lenovo-q706f
 # on device or via chroot:
 apk add --allow-untrusted linux-postmarketos-qcom-sm8250-*.apk \
   device-lenovo-q706f-*.apk firmware-lenovo-q706f-cirrus-*.apk
+```
+
+**Kernel-only update over USB networking (after a local build):**
+
+```bash
+scripts/install-kernel-apk-ssh.sh   # install latest r*.apk from packages/
+# or build + install in one step:
+scripts/install-kernel-ssh.sh
 ```
 
 5. Reboot. For DP: use a true **DP Alt Mode** cable/dock; start with 1080p if link training is flaky, then move to 4K once `num_lanes=4`.
@@ -188,7 +216,7 @@ Intended for contribution back to:
 - [pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports)
 - [qualcomm-sm8250/linux](https://gitlab.postmarketos.org/soc/qualcomm-sm8250/linux)
 
-Kernel patches 0002/0003 are backports of mainline commits; 0001/0004 are device-specific.
+Kernel patches 0002/0003 are backports of mainline commits; 0006 is adapted from a Kavan Smith MSM DSI fix; 0001/0004/0005 are device-specific.
 
 ## License
 

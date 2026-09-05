@@ -1,0 +1,36 @@
+From: Kavan Smith <kavansmith82@gmail.com>
+Subject: [PATCH] drm/msm/dsi: don't re-lock the PHY PLL on every DSI command
+
+Backlight DCS writes during video scanout call msm_dsi_host_xfer_prepare(),
+which unconditionally re-runs link_clk_set_rate(). That re-locks the DSI PHY
+PLL while the panel is actively displaying, glitching the byte clock and
+corrupting the DSC stream (花屏 / black screen on Q706F).
+
+The link rate is already programmed in msm_dsi_host_power_on(); skip the
+redundant set once the link is up.
+
+Link: https://lists.freedesktop.org/archives/dri-devel/2018-April/172218.html
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -2114,7 +2114,15 @@
+ 	 * mdp clock need to be enabled to receive dsi interrupt
+ 	 */
+ 	pm_runtime_get_sync(&msm_host->pdev->dev);
+-	cfg_hnd->ops->link_clk_set_rate(msm_host);
++	/*
++	 * Don't re-set the link clock rate when the link is already up. The
++	 * requested byte-clock rate rarely equals the DSI PHY PLL's achievable
++	 * rate, so clk_set_rate() re-locks the PLL on every command; for a
++	 * video-mode panel that clock glitch makes the panel lose pixel lock
++	 * mid-scanout (e.g. every backlight update).
++	 */
++	if (!msm_host->power_on)
++		cfg_hnd->ops->link_clk_set_rate(msm_host);
+ 	cfg_hnd->ops->link_clk_enable(msm_host);
+ 
+ 	/* TODO: vote for bus bandwidth */
