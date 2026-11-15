@@ -1,0 +1,23 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] HID: i2c-hid: Elan 04F3:31F3 BAD_INPUT_SIZE
+
+The Q706F folio touchpad interrupts but i2c-hid drops the packets as
+"incomplete report" (short length vs parsed wMaxInputLength). Accept
+the size in the I2C prefix, matching other ITE/Elan I2C-HID devices.
+
+Keep the existing ELAN NO_WAKEUP_AFTER_RESET and BOGUS_IRQ flags.
+
+---
+--- a/drivers/hid/i2c-hid/i2c-hid-core.c
++++ b/drivers/hid/i2c-hid/i2c-hid-core.c
+@@ -147,6 +147,10 @@
+ 	{ USB_VENDOR_ID_ELAN, HID_ANY_ID,
+ 		 I2C_HID_QUIRK_NO_WAKEUP_AFTER_RESET |
+ 		 I2C_HID_QUIRK_BOGUS_IRQ },
++	{ USB_VENDOR_ID_ELAN, 0x31f3,
++		 I2C_HID_QUIRK_NO_WAKEUP_AFTER_RESET |
++		 I2C_HID_QUIRK_BOGUS_IRQ |
++		 I2C_HID_QUIRK_BAD_INPUT_SIZE },
+ 	{ I2C_VENDOR_ID_GOODIX, I2C_DEVICE_ID_GOODIX_0D42,
+ 		 I2C_HID_QUIRK_DELAY_WAKEUP_AFTER_RESUME },
+ 	{ I2C_VENDOR_ID_BLTP, I2C_PRODUCT_ID_BLTP7853,

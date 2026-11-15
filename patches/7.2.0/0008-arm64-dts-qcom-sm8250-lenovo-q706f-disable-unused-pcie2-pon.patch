@@ -1,0 +1,34 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: disable unused PCIe2 and PM8009 PON
+
+Android DTBO for board-id 0x30d08 sets both pcie1 and pcie2 to disabled.
+Mainline left pcie2 okay, so the RC probes, prints dummy vdda supplies,
+then "Device not found".
+
+pm8009's pon@800 also probes as "qcom-pon" and collides with PM8150 PON
+(-EEXIST). Disable it; power/volume keys stay on PM8150.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -951,14 +951,18 @@
+ 	};
+ };
+ 
+ &pcie2 {
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ &pcie2_phy {
+ 	vdda-phy-supply = <&vreg_l5a_0p88>;
+ 	vdda-pll-supply = <&vreg_l9a_1p2>;
+-	status = "okay";
++	status = "disabled";
++};
++
++&pm8009_pon {
++	status = "disabled";
+ };
+ 
+ &pm8150b_adc {

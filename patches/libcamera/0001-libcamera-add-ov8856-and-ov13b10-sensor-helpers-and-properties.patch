@@ -1,0 +1,158 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] libcamera: add ov8856 and ov13b10 sensor helpers and properties
+
+Lenovo TB-Q706F has an OV8856 front camera and an OV13B10 rear camera
+on qcom-camss. With libcamera 0.7.1 the simple pipeline and soft ISP
+work, but they warn that there is no sensor helper and no static
+properties for either sensor, so AGC has no gain model and the sensor
+delays are guessed.
+
+Sources for the values:
+- Analogue gain: both Linux drivers write V4L2_CID_ANALOGUE_GAIN as is
+  to 0x3508/0x3509. ov8856 has a minimum of 128 and ov13b10 a range
+  of 0x80-0x7c0 with 0x80 as default, so 128 is 1x. This is the same
+  1/128 step as the existing ov8858 and ov13858 helpers. Not checked
+  against a datasheet.
+- Black level: estimated, 64 at 10 bits (the usual OmniVision value).
+  Raw captures on the tablet are consistent with it (low percentiles
+  67-71 for ov8856 and 63-64 for ov13b10); these were scenes, not dark
+  frames.
+- Unit cell size: 1.12 um for both, from the OmniVision product briefs.
+- Test patterns: from the driver menus; only "off" and the first colour
+  bar map to libcamera modes.
+- Sensor delays: estimated (2 frames each, as for ov64a40); not
+  measured.
+
+Based on Fedora 44 libcamera-0.7.1-1 (v0.7.1 + 0001-disable-rpi-pisp).
+
+---
+diff --git a/src/ipa/libipa/camera_sensor_helper.cpp b/src/ipa/libipa/camera_sensor_helper.cpp
+index e3e3e53..cccc4e9 100644
+--- a/src/ipa/libipa/camera_sensor_helper.cpp
++++ b/src/ipa/libipa/camera_sensor_helper.cpp
+@@ -753,6 +753,29 @@ public:
+ };
+ REGISTER_CAMERA_SENSOR_HELPER("ov64a40", CameraSensorHelperOv64a40)
+ 
++class CameraSensorHelperOv8856 : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperOv8856()
++	{
++		/*
++		 * Black level: estimated, not from the datasheet. 64 at 10 bits
++		 * is the usual OmniVision default; on a Lenovo TB-Q706F raw
++		 * capture the 0.01-1 % percentiles were 67-71 (scene, not a
++		 * dark frame), which is consistent with it.
++		 */
++		blackLevel_ = 4096;
++		/*
++		 * The Linux ov8856 driver writes V4L2_CID_ANALOGUE_GAIN as is to
++		 * 0x3508/0x3509 with a minimum of 128, so 128 is 1x. This is
++		 * the same 1/128 step as the ov8858 and ov13858 helpers. Not
++		 * checked against the datasheet.
++		 */
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 128 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("ov8856", CameraSensorHelperOv8856)
++
+ class CameraSensorHelperOv8858 : public CameraSensorHelper
+ {
+ public:
+@@ -789,6 +812,29 @@ public:
+ };
+ REGISTER_CAMERA_SENSOR_HELPER("ov13858", CameraSensorHelperOv13858)
+ 
++class CameraSensorHelperOv13b10 : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperOv13b10()
++	{
++		/*
++		 * Black level: estimated, not from the datasheet. 64 at 10 bits
++		 * is the usual OmniVision default; on a Lenovo TB-Q706F raw
++		 * capture the 0.1-1 % percentiles were 63-64 (scene, not a
++		 * dark frame), which is consistent with it.
++		 */
++		blackLevel_ = 4096;
++		/*
++		 * The Linux ov13b10 driver writes V4L2_CID_ANALOGUE_GAIN as is
++		 * to 0x3508/0x3509, range 0x80-0x7c0 with 0x80 as default, so
++		 * 0x80 is 1x and 0x7c0 is 15.5x. Same 1/128 step as ov13858.
++		 * Not checked against the datasheet.
++		 */
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 128 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("ov13b10", CameraSensorHelperOv13b10)
++
+ class CameraSensorHelperVd55g1 : public CameraSensorHelper
+ {
+ public:
+diff --git a/src/libcamera/sensor/camera_sensor_properties.cpp b/src/libcamera/sensor/camera_sensor_properties.cpp
+index b217363..fc8921c 100644
+--- a/src/libcamera/sensor/camera_sensor_properties.cpp
++++ b/src/libcamera/sensor/camera_sensor_properties.cpp
+@@ -446,6 +446,30 @@ const CameraSensorProperties *CameraSensorProperties::get(const std::string &sen
+ 				.hblankDelay = 2
+ 			},
+ 		} },
++		{ "ov8856", {
++			/* OmniVision OV8856 product brief: 1.12 um x 1.12 um */
++			.unitCellSize = { 1120, 1120 },
++			.testPatternModes = {
++				{ controls::draft::TestPatternModeOff, 0 },
++				{ controls::draft::TestPatternModeColorBars, 1 },
++				/*
++				 * No corresponding test pattern mode for:
++				 * 2: "Top-Bottom Darker Color Bar"
++				 * 3: "Right-Left Darker Color Bar"
++				 * 4: "Bottom-Top Darker Color Bar"
++				 */
++			},
++			/*
++			 * Estimated, not from a datasheet: the common
++			 * OmniVision value, as used for ov64a40.
++			 */
++			.sensorDelays = {
++				.exposureDelay = 2,
++				.gainDelay = 2,
++				.vblankDelay = 2,
++				.hblankDelay = 2
++			},
++		} },
+ 		{ "ov8858", {
+ 			.unitCellSize = { 1120, 1120 },
+ 			.testPatternModes = {
+@@ -493,6 +517,30 @@ const CameraSensorProperties *CameraSensorProperties::get(const std::string &sen
+ 			},
+ 			.sensorDelays = { },
+ 		} },
++		{ "ov13b10", {
++			/* OmniVision OV13B10 product brief: 1.12 um x 1.12 um */
++			.unitCellSize = { 1120, 1120 },
++			.testPatternModes = {
++				{ controls::draft::TestPatternModeOff, 0 },
++				{ controls::draft::TestPatternModeColorBars, 1 },
++				/*
++				 * No corresponding test pattern mode for:
++				 * 2: "Vertical Color Bar Type 2"
++				 * 3: "Vertical Color Bar Type 3"
++				 * 4: "Vertical Color Bar Type 4"
++				 */
++			},
++			/*
++			 * Estimated, not from a datasheet: the common
++			 * OmniVision value, as used for ov64a40.
++			 */
++			.sensorDelays = {
++				.exposureDelay = 2,
++				.gainDelay = 2,
++				.vblankDelay = 2,
++				.hblankDelay = 2
++			},
++		} },
+ 		{ "vd55g1", {
+ 			.unitCellSize = { 2160, 2160 },
+ 			.testPatternModes = {

@@ -1,0 +1,12 @@
+[Unit]
+Description=Q706F virtual V4L2 camera (%i)
+ConditionPathExists=/etc/q706f-vcam/%i.env
+
+[Service]
+ExecStart=/usr/lib/device-lenovo-q706f/q706f-vcam.sh %i
+Restart=on-failure
+RestartSec=3
+Nice=5
+
+[Install]
+WantedBy=default.target

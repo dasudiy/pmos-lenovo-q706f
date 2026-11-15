@@ -1,0 +1,11 @@
+enable q706f-usb-gadget.service
+enable q706f-adsp.service
+enable q706f-bt-addr.service
+enable q706f-htpdate.service
+enable q706f-typec-sink.service
+enable sshd.service
+enable NetworkManager.service
+enable gdm.service
+disable kernel-bootcfg-boot-restore.service
+disable auditd.service
+disable audit-rules.service

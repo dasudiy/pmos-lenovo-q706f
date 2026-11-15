@@ -1,0 +1,135 @@
+From: 大苏DIY <asuka@lenovo-q706f>
+Date: Wed, 14 Oct 2026 12:00:00 +0800
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: enable WCD938x analog
+ microphones
+
+The tablet's two microphones are analog mics on the WCD938x codec
+(AMIC1/ADC1 and AMIC3/ADC2-INP3, per the vendor mixer_paths_mtp.xml
+"dual-amic" path), reached through the LPASS TX macro over SoundWire
+(swr2). The VA macro has no DMICs wired. Add the codec node (reset GPIO
+32, S4A/BOB supplies as in the vendor DTBO), enable rx/tx macros and
+swr1/swr2 (the codec driver needs both SDW halves to bind), add a
+"WCD Capture" back-end on TX_CODEC_DMA_TX_3 and the mic-bias routing.
+
+Also set qcom,dmic-sample-rate on the VA macro (vendor value 600 kHz)
+to silence "dmic-sample-rate dt entry missing".
+
+Speaker playback (PRIMARY_TDM_RX_0 -> 4x CS35L45) is unchanged.
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -1369,6 +1369,76 @@
+ };
+ 
+ 
++/ {
++	/*
++	 * WCD9380/9385 codec: only its analog mic inputs are used on this
++	 * board (no 3.5 mm jack; speakers are the CS35L45 amps on TDM).
++	 * Vendor DTBO (board-id 0x30f08): reset via msm_cdc_pinctrl@32 (GPIO 32),
++	 * rxtx/io/buck supplies S4A, mic-bias supply BOB, micbias 1.8 V.
++	 * Vendor mixer_paths_mtp.xml records with "dual-amic":
++	 * AMIC1 (ADC1, MIC BIAS1) and AMIC3 (ADC2/INP3, MIC BIAS3).
++	 */
++	wcd938x: audio-codec {
++		compatible = "qcom,wcd9380-codec";
++
++		pinctrl-names = "default", "sleep";
++		pinctrl-0 = <&wcd938x_reset_default>;
++		pinctrl-1 = <&wcd938x_reset_sleep>;
++
++		reset-gpios = <&tlmm 32 GPIO_ACTIVE_LOW>;
++
++		vdd-buck-supply = <&vreg_s4a_1p8>;
++		vdd-rxtx-supply = <&vreg_s4a_1p8>;
++		vdd-io-supply = <&vreg_s4a_1p8>;
++		vdd-mic-bias-supply = <&vreg_bob>;
++
++		qcom,micbias1-microvolt = <1800000>;
++		qcom,micbias2-microvolt = <1800000>;
++		qcom,micbias3-microvolt = <1800000>;
++		qcom,micbias4-microvolt = <1800000>;
++		qcom,mbhc-buttons-vthreshold-microvolt = <75000 150000 237000 500000 500000 500000 500000 500000>;
++		qcom,mbhc-headset-vthreshold-microvolt = <1700000>;
++		qcom,mbhc-headphone-vthreshold-microvolt = <50000>;
++		qcom,rx-device = <&wcd_rx>;
++		qcom,tx-device = <&wcd_tx>;
++
++		#sound-dai-cells = <1>;
++	};
++};
++
++&rxmacro {
++	status = "okay";
++};
++
++&swr1 {
++	status = "okay";
++
++	wcd_rx: wcd9380-rx@0,4 {
++		compatible = "sdw20217010d00";
++		reg = <0 4>;
++		qcom,rx-port-mapping = <1 2 3 4 5>;
++	};
++};
++
++&swr2 {
++	status = "okay";
++
++	wcd_tx: wcd9380-tx@0,3 {
++		compatible = "sdw20217010d00";
++		reg = <0 3>;
++		qcom,tx-port-mapping = <2 3 4 5>;
++	};
++};
++
++&txmacro {
++	status = "okay";
++};
++
++&vamacro {
++	/* vendor: qcom,va-dmic-sample-rate = <600000>; no VA DMICs are wired */
++	qcom,dmic-sample-rate = <600000>;
++};
++
+ &slpi {
+ 	status = "okay";
+ 	firmware-name = "qcom/sm8250/q706f/slpi.mbn";
+@@ -1379,6 +1449,14 @@
+ 	model = "Xiaoxin Pad Pro";
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pri_tdm_active>;
++	audio-routing =
++		"AMIC1", "MIC BIAS1",
++		"AMIC2", "MIC BIAS2",
++		"AMIC3", "MIC BIAS3",
++		"TX SWR_ADC0", "ADC1_OUTPUT",
++		"TX SWR_ADC1", "ADC2_OUTPUT",
++		"TX SWR_ADC2", "ADC3_OUTPUT",
++		"TX SWR_ADC3", "ADC4_OUTPUT";
+ 
+ 	mm1-dai-link {
+ 		link-name = "MultiMedia1";
+@@ -1404,6 +1482,22 @@
+ 						<&cs35l41_spk3 0>, <&cs35l41_spk4 0>;
+ 		};
+ 	};
++
++	wcd-capture-dai-link {
++		link-name = "WCD Capture";
++
++		cpu {
++			sound-dai = <&q6afedai TX_CODEC_DMA_TX_3>;
++		};
++
++		codec {
++			sound-dai = <&wcd938x 1>, <&swr2 0>, <&txmacro 0>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++	};
+ };
+ 
+ &spi13 {

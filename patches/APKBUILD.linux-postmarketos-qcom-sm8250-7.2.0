@@ -1,0 +1,125 @@
+# Reference: <https://postmarketos.org/vendorkernel>
+# Kernel config based on pmaports main 7.2.0-r0 + kernel-config/q706f-extra.config
+# Co-Maintainer: bluebunny <bluebunny@postmarketos.org>
+maintainer="Jianhua Lu <lujianhua000@gmail.com>"
+_flavor="postmarketos-qcom-sm8250"
+pkgname=linux-$_flavor
+pkgver=7.2.0
+pkgrel=6
+pkgdesc="Mainline kernel fork for SM8250"
+arch="aarch64"
+_carch="arm64"
+url="https://gitlab.postmarketos.org/soc/qualcomm-sm8250/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	pmb:kconfigcheck-community
+	pmb:kconfigcheck-uefi
+"
+makedepends="
+	bash
+	bison
+	clang
+	elfutils-dev
+	findutils
+	flex
+	linux-headers
+	lld
+	llvm
+	openssl-dev
+	pahole
+	perl
+	postmarketos-installkernel
+	python3
+"
+
+# 0002 (DP Configure signalling) and 0003 (qmp-combo typec mux) are already
+# in sm8250-7.2.0. 0005 still applies: brightness is the old 0x53=0x28 path
+# even though probe uses devm_drm_panel_alloc.
+
+# Source
+_tag="sm8250-$pkgver"
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_tag.tar.gz::https://gitlab.postmarketos.org/soc/qualcomm-sm8250/linux/-/archive/$_tag/linux-$_tag.tar.gz
+	$_config
+	0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch
+	0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+	0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch
+	0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch
+	0007-arm64-dts-qcom-sm8250-lenovo-q706f-spi13-cs-gpio.patch
+	0008-arm64-dts-qcom-sm8250-lenovo-q706f-disable-unused-pcie2-pon.patch
+	0009-arm64-dts-qcom-sm8250-lenovo-q706f-folio-touchpad-probe-delay.patch
+	0010-HID-i2c-hid-override-q706f-elan-folio-touchpad-descriptors.patch
+	0011-HID-i2c-hid-elan-04f3-31f3-bad-input-size.patch
+	0012-arm64-dts-qcom-sm8250-lenovo-q706f-enable-pm8150b-charger.patch
+	0013-usb-dwc3-drop-gadget-pullup-on-USB_ROLE_NONE.patch
+	0014-usb-dwc3-apply-pullup-while-controller-is-active.patch
+	0015-power-bq27xxx-do-not-report-full-while-discharging.patch
+	0016-arm64-dts-qcom-sm8250-lenovo-q706f-enable-front-camera-ov8856.patch
+	0017-dt-bindings-media-i2c-add-ovti-ov13b10.patch
+	0018-media-i2c-ov13b10-add-OF-match-table.patch
+	0019-arm64-dts-qcom-sm8250-lenovo-q706f-enable-rear-camera-ov13b10.patch
+"
+builddir="$srcdir/linux-$_tag"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/config-$_flavor.$arch" .config
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	if [ -e "$builddir/arch/$_carch/boot/vmlinuz.efi" ]; then
+		install -Dm644 "$builddir/arch/$_carch/boot/vmlinuz.efi" \
+			"$pkgdir/boot/linux.efi"
+		install -Dm644 "$builddir/arch/$_carch/boot/vmlinuz" \
+			"$pkgdir/boot/vmlinuz"
+	else
+		echo "WARNING: CONFIG_ZBOOT not enabled!"
+		install -Dm644 "$builddir/arch/$_carch/boot/Image.gz" \
+			"$pkgdir/boot/vmlinuz"
+	fi
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir"/usr \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir/boot/dtbs"
+	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+
+	install -D "$builddir/include/config/kernel.release" \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+26d48ebd04c43e993bd00f9c055d40daf87b4919332c974e3c0db236135b522415e3dcf4b512e4028cc42da63fe4639991c3870bcb977967846db590a0b950b7  linux-postmarketos-qcom-sm8250-sm8250-7.2.0.tar.gz
+5f6807931e53f8154421d4e425b54253ec269de8a33e7373148970961d619e774cc2b1ea63a04945a3c17cc16afd385e367e7976f0d9cc4f308a45880b74a8e0  config-postmarketos-qcom-sm8250.aarch64
+00cd0ee331e161a92fb54fa429ff58a230d996aded6f979957e8dc7e65818684ad9c4f8636a1ade393265aa9a2f6d6dd212c6b7d157773b36755b28119ef0fb0  0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch
+5cd56b6bd44e9946c77e7c74870e19352ff188ff83c6b19f6a71226ba76ba23fd2583f348b5e8fbb81105c3928bbe574d1bd006352916b53501ede7be7ed5643  0004-arm64-dts-qcom-sm8250-lenovo-q706f-4-lane-DP.patch
+f53d993ddb7628882e7623d1162cb10ea7785bd5ef7db25b8220411f6e3ea22dcce3ae0d349e36b71af7e0f21aa1f11f345dd8d8e016842ea39c5d5043d5fa9b  0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch
+253dcf123b74981c38d206d2f238e0f141eed95c0d4e0e59e34da2714a90d72c9f3f57493b29d799146f24d7a02d43674f7e313d3a7a859790a94e4a20aa8432  0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch
+93edd0dde7d2f270ea11e273d539de35eb0ee0f741d2e772dfa0bbecb5254195dcdb890af666173c1e255d407f869027ea5bf47401866b56aa931b93cb063db8  0007-arm64-dts-qcom-sm8250-lenovo-q706f-spi13-cs-gpio.patch
+6778b40942f9cea84284e1d8bce315c7c5db279941775657d1402d47bb812f64d07d21876816ad7698a335bd634b70ac6268262f5d19ce000915af10fd8af03f  0008-arm64-dts-qcom-sm8250-lenovo-q706f-disable-unused-pcie2-pon.patch
+74319f03f99238e167dc4476e5a35670bded992d382d58802774efe57133e6ac64a7038a54b54a2c3e40bb1af2352f348748ab1ff687c5e47e62af709567db03  0009-arm64-dts-qcom-sm8250-lenovo-q706f-folio-touchpad-probe-delay.patch
+be1314cbc2c2044175a91a4a6c69f91c5dd75e85b14a7a6a10fb6d486fe23328815f625d4f224d0661d7e20c7683b845ab2e7998d315a0591b5eeb8303843aca  0010-HID-i2c-hid-override-q706f-elan-folio-touchpad-descriptors.patch
+40933938b5c2bf538ccd1599ae7a6bfb7fb629b0a4bea69990ab771c91ddf43b0cbe9db3a0ccbbae82e076051e8c69e54493848d9108614c5054b4505d885242  0011-HID-i2c-hid-elan-04f3-31f3-bad-input-size.patch
+3d2aff49952c96283ad5d7e95872bacc0069c0cd0f37d851e428894a63bcd47c2c34fecad043c63366fba66bb22faf10f5095458b40ee8651783de710c6b6e5a  0012-arm64-dts-qcom-sm8250-lenovo-q706f-enable-pm8150b-charger.patch
+8230bf415d599c890d0640e9b4c1de098a9a72c35ab83bec73a4b7a47893ed303be22d55c549be6477a3ff1050216502109baa61e94de5db483f7fc88c87119f  0013-usb-dwc3-drop-gadget-pullup-on-USB_ROLE_NONE.patch
+bfca9f186a1d0fad13273eb2294fb2d62d116535cb0a8efe8c9e77b265b1be19f7c003151fa75dd72fb5c87e9139083a1abbfbd35f77861d55b6029e6b37cb64  0014-usb-dwc3-apply-pullup-while-controller-is-active.patch
+892e282cade38d825a80c224583b9ad139642c0e9e3f6d89bb1400f2bffdc72607a855ba560e56194c7d5142ccb981a4a888d2e3be2ec669357f8080a2ebc785  0015-power-bq27xxx-do-not-report-full-while-discharging.patch
+04cd7425534be08c00f912fa877b700149bf2585e0cfa56949a5098c69bd6e4904a0f302a734a7e6f7eba7aa595a41c448d11d3707e73fdcba7171663b5c3832  0016-arm64-dts-qcom-sm8250-lenovo-q706f-enable-front-camera-ov8856.patch
+561bae7282c24d5e8131797e538040e503f7c29a2d1ad0a0ba72e4d9ea6e2d3ca20df314b766d5ad6a60f7db8d6585e26a7fcb4f481efd89da9f4c545fa1fff6  0017-dt-bindings-media-i2c-add-ovti-ov13b10.patch
+11c45204a1b439155584104aa24edc2c2820201e195a7edf8213f2c192ef0f6512bef6cf39c3fad160ebe22217ead5b1de6905f93fe7b1b32221323a6a8b8b1f  0018-media-i2c-ov13b10-add-OF-match-table.patch
+03ee29119f8a5b68d2d0800dc0f779496a0cd6f0ea4fe914312d4fdf56f2a7729fbfee26443018ea7dd00265873ee557ae70411d5b89e7dbb7c46cfcbbfc1d79  0019-arm64-dts-qcom-sm8250-lenovo-q706f-enable-rear-camera-ov13b10.patch
+"

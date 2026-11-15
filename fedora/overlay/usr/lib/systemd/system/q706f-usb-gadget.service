@@ -1,0 +1,12 @@
+[Unit]
+Description=Q706F USB NCM gadget (172.16.42.1)
+After=sys-kernel-config.mount systemd-modules-load.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/q706f-usb-gadget
+
+[Install]
+WantedBy=multi-user.target

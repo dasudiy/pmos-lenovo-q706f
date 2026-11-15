@@ -1,0 +1,5 @@
+# Copy to /etc/q706f-bt-addr to pin the Bluetooth public address.
+# One MAC address on the first non-comment line. Without this file,
+# q706f-bt-addr.sh uses the persist partition, then the permanent Wi-Fi MAC + 1,
+# then an address derived from machine-id.
+# XX:XX:XX:XX:XX:XX

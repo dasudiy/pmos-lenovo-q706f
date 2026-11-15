@@ -1,0 +1,40 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] media: i2c: ov13b10: add OF match table
+
+The driver only matches ACPI, so it never binds on DT systems even
+though it already gets its clock, reset GPIO and supplies through
+generic APIs. Add an "ovti,ov13b10" OF match table.
+
+The external clock still has to be 19.2 MHz: the PLL settings
+(0x0303/0x0305) assume it, and probe rejects other rates.
+
+---
+--- a/drivers/media/i2c/ov13b10.c
++++ b/drivers/media/i2c/ov13b10.c
+@@ -6,6 +6,7 @@
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/module.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/regulator/consumer.h>
+@@ -1705,11 +1706,18 @@
+ MODULE_DEVICE_TABLE(acpi, ov13b10_acpi_ids);
+ #endif
+ 
++static const struct of_device_id ov13b10_of_match[] = {
++	{ .compatible = "ovti,ov13b10" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, ov13b10_of_match);
++
+ static struct i2c_driver ov13b10_i2c_driver = {
+ 	.driver = {
+ 		.name = "ov13b10",
+ 		.pm = pm_ptr(&ov13b10_pm_ops),
+ 		.acpi_match_table = ACPI_PTR(ov13b10_acpi_ids),
++		.of_match_table = ov13b10_of_match,
+ 	},
+ 	.probe = ov13b10_probe,
+ 	.remove = ov13b10_remove,

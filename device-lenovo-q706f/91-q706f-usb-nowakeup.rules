@@ -1,0 +1,3 @@
+# USB gadget/host activity must not resume s2idle (PC attached via usb0).
+ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="a6f8800.usb", ATTR{power/wakeup}="disabled"
+ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="a600000.usb", ATTR{power/wakeup}="disabled"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Pause Q706F speakers when the panel blanks
+After=pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/device-lenovo-q706f/q706f-audio-blank.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=gnome-session.target

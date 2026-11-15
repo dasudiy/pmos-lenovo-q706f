@@ -1,0 +1,142 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: enable the OV8856 front camera
+
+The Android PVT DTBO (board-id 0x30d08) puts the front camera on
+cam_cci1 master 0, CSIPHY2, MCLK2 (gpio96) and PM8009 GPIO4
+(CAM_FRONT_RST). The CamX blob for this slot reports OV8856 at 0x6c
+(7-bit 0x36), chip ID 0x885a, 4 lanes, 19.2 MHz MCLK. Supplies are
+PM8009 L7 (DOVDD), L6 (AVDD) and L3 (DVDD).
+
+Android asks for 1.25 V on L3. pmic5_nldo moves in 8 mV steps, so pin
+L3F to 1.248 V; the OV8856 core range is 1.14-1.26 V. The old
+1.056-1.2 V range left the rail at 1.056 V because ov8856 never sets a
+voltage.
+
+sm8250.dtsi has no MCLK2-only pin state, and cam2_default also muxes
+gpio78, which is not a camera reset on this board. Add one for gpio96.
+
+Rear cameras, the actuator and the EEPROM are left alone. ov8856
+requires every 4-lane menu frequency (360 and 180 MHz) to be listed.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -13,6 +13,7 @@
+ #include <dt-bindings/sound/qcom,q6asm.h>
+ #include <dt-bindings/sound/cs35l45.h>
+ #include <dt-bindings/leds/common.h>
++#include <dt-bindings/media/video-interfaces.h>
+ #include "sm8250.dtsi"
+ #include "pm8150.dtsi"
+ #include "pm8150b.dtsi"
+@@ -309,10 +310,15 @@
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
++		/*
++		 * Front camera DVDD (OV8856 / S5K4H7). Android DTBO asks for
++		 * 1.25 V; pmic5_nldo has 8 mV steps, so 1.248 V is the closest
++		 * value at or below it. OV8856 core is 1.14-1.26 V.
++		 */
+ 		vreg_l3f_1p1: ldo3 {
+ 			regulator-name = "vreg_l3f_1p1";
+-			regulator-min-microvolt = <1056000>;
+-			regulator-max-microvolt = <1200000>;
++			regulator-min-microvolt = <1248000>;
++			regulator-max-microvolt = <1248000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+@@ -637,6 +643,64 @@
+ 	};
+ };
+ 
++&camss {
++	vdda-phy-supply = <&vreg_l5a_0p88>;
++	vdda-pll-supply = <&vreg_l9a_1p2>;
++
++	status = "okay";
++
++	ports {
++		/* Front camera: Android DTBO cam-sensor2 csiphy-sd-index = 2 */
++		port@2 {
++			csiphy2_ep: endpoint {
++				clock-lanes = <7>;
++				data-lanes = <0 1 2 3>;
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				remote-endpoint = <&ov8856_front_ep>;
++			};
++		};
++	};
++};
++
++&cci1 {
++	status = "okay";
++};
++
++&cci1_i2c0 {
++	/* Android DTBO cam-sensor2: cam_cci1, cci-master 0 */
++	camera_front: camera@36 {
++		compatible = "ovti,ov8856";
++		reg = <0x36>;
++
++		clocks = <&camcc CAM_CC_MCLK2_CLK>;
++		clock-names = "xvclk";
++		assigned-clocks = <&camcc CAM_CC_MCLK2_CLK>;
++		assigned-clock-rates = <19200000>;
++
++		/* PM8009 GPIO4, CAM_FRONT_RST; SPMI GPIO specifiers are 1-based */
++		reset-gpios = <&pm8009_gpios 4 GPIO_ACTIVE_LOW>;
++
++		pinctrl-0 = <&cam_mclk2_default>, <&cam_front_rst_default>;
++		pinctrl-names = "default";
++
++		dovdd-supply = <&vreg_l7f_1p8>;
++		avdd-supply = <&vreg_l6f_2p8>;
++		dvdd-supply = <&vreg_l3f_1p1>;
++
++		orientation = <0>; /* front */
++		/* Android sensor-position-roll = 270; not checked on a frame yet */
++		rotation = <270>;
++
++		port {
++			ov8856_front_ep: endpoint {
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <360000000 180000000>;
++				remote-endpoint = <&csiphy2_ep>;
++			};
++		};
++	};
++};
++
+ &cdsp {
+ 	status = "okay";
+ 	firmware-name = "qcom/sm8250/q706f/cdsp.mbn";
+@@ -1039,6 +1103,12 @@
+ 		drive-strength = <16>;
+ 		bias-disable;
+ 	};
++
++	cam_front_rst_default: cam-front-rst-default-state {
++		pins = "gpio4";
++		function = "normal";
++		bias-disable;
++	};
+ };
+ 
+ &pm8150_gpios {
+@@ -1384,6 +1454,14 @@
+ 		};
+ 	};
+ 
++	/* sm8250.dtsi has no MCLK2-only state; cam2_default also muxes gpio78 */
++	cam_mclk2_default: cam-mclk2-default-state {
++		pins = "gpio96";
++		function = "cam_mclk";
++		drive-strength = <4>;
++		bias-disable;
++	};
++
+ 	spkr_1_sd_n_active: spkr-1-sd-n-active {
+ 		pins = "gpio26";
+ 		function = "gpio";

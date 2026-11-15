@@ -1,0 +1,15 @@
+[connection]
+id=USB Networking
+uuid=a1b2c3d4-e5f6-7890-abcd-ef1234567890
+type=ethernet
+interface-name=usb0
+autoconnect=true
+
+[ethernet]
+
+[ipv4]
+method=manual
+address1=172.16.42.1/16
+
+[ipv6]
+method=disabled

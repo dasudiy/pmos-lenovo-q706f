@@ -1,10 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DEVICE="${DEVICE:-asuka@172.16.42.1}"
-PMOS_WORK="${PMOS_WORK:-/home/asuka/pmOS}"
-PMOS_CFG="${PMOS_CFG:-/home/asuka/.config/pmbootstrap_v3.cfg}"
-REPO="${REPO:-/home/asuka/pmOS/q706f-pmos-fixes}"
+if [ -z "${PMOS_WORK:-}" ] && [ -d "$(dirname "$REPO")/cache_git/pmaports" ]; then
+	PMOS_WORK="$(dirname "$REPO")"
+fi
+PMOS_WORK="${PMOS_WORK:?set PMOS_WORK to your pmbootstrap work directory}"
+PMOS_CFG="${PMOS_CFG:-$HOME/.config/pmbootstrap_v3.cfg}"
 PMAP="${PMAP:-$PMOS_WORK/cache_git/pmaports}"
 PKG=linux-postmarketos-qcom-sm8250
 PKGVER=6.17.0

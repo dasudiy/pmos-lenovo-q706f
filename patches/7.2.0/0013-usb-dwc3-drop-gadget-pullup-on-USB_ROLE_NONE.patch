@@ -1,0 +1,34 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] usb: dwc3: drop gadget pullup on USB_ROLE_NONE
+
+TCPM reports cable detach as USB_ROLE_NONE. If the controller is already
+in device mode, dwc3_set_mode() does not change the port and the
+gadget keeps D+ pulled up, so usb0 stays configured after the
+Type-C partner is gone. Disconnect on none and connect again when
+the port returns to device.
+
+---
+--- a/drivers/usb/dwc3/drd.c
++++ b/drivers/usb/dwc3/drd.c
+@@ -469,6 +469,21 @@
+ 	}
+ 
+ 	dwc3_pre_set_role(dwc, role);
++
++	/*
++	 * Cable detach is USB_ROLE_NONE while the port is already in
++	 * device mode. dwc3_set_mode() then no-ops, so an enumerated
++	 * gadget keeps D+ pulled up and usb0 stays configured with no
++	 * Type-C partner. Drop the pullup until the next device role.
++	 */
++	if (role == USB_ROLE_NONE) {
++		if (dwc->gadget)
++			usb_gadget_disconnect(dwc->gadget);
++	} else if (role == USB_ROLE_DEVICE) {
++		if (dwc->gadget)
++			usb_gadget_connect(dwc->gadget);
++	}
++
+ 	dwc3_set_mode(dwc, mode);
+ 	return 0;
+ }

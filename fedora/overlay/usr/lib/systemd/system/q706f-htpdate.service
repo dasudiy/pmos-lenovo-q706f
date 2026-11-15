@@ -1,0 +1,15 @@
+[Unit]
+Description=Set the clock from an HTTP Date header
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# exec, not oneshot: run in the background so multi-user.target does not
+# wait for the HTTP Date retries (up to ~5 min without network).
+Type=exec
+# Router DNS is fake-ip (198.18.0.0/15) and UDP/123 does not answer, so chrony
+# never steps the clock. The RTC also reads back as 1970.
+ExecStart=/bin/sh -c 'i=0; while [ $$i -lt 30 ]; do d=$$(curl -4 -sI --max-time 8 http://1.1.1.1 | sed -n "s/^[Dd]ate: //p" | tr -d "\\r"); if [ -n "$$d" ]; then date -u -s "$$d"; exit 0; fi; i=$$((i+1)); sleep 2; done; exit 0'
+
+[Install]
+WantedBy=multi-user.target

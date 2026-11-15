@@ -1,0 +1,54 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] usb: dwc3: apply pullup while the controller is active
+
+pm_runtime_get_sync() returns 0 when runtime resume just ran. dwc3
+treated that as "the pullup was already updated" and returned. On this
+board the resume path does not always change D+, so a Type-C attach
+left usb0 down and a detach left it configured.
+
+Also drive the Qualcomm VBUS-valid override from the new role. Detach
+is USB_ROLE_NONE and must clear it; device mode must set it.
+
+---
+--- a/drivers/usb/dwc3/dwc3-qcom.c
++++ b/drivers/usb/dwc3/dwc3-qcom.c
+@@ -570,10 +570,11 @@ static void dwc3_qcom_set_role_notifier(struct dwc3 *dwc, enum usb_role next_rol
+ 		return;
+ 	}
+ 
+-	if (qcom->current_role == USB_ROLE_DEVICE)
+-		dwc3_qcom_vbus_override_enable(qcom, false);
+-	else if (qcom->current_role != USB_ROLE_DEVICE)
+-		dwc3_qcom_vbus_override_enable(qcom, true);
++	/* Tell the HS PHY whether VBUS is present. Cable detach is NONE. */
++	if (next_role == USB_ROLE_DEVICE)
++		dwc3_qcom_vbus_override_enable(qcom, true);
++	else
++		dwc3_qcom_vbus_override_enable(qcom, false);
+ 
+ 	pm_runtime_mark_last_busy(qcom->dev);
+ 	pm_runtime_put_sync(qcom->dev);
+--- a/drivers/usb/dwc3/gadget.c
++++ b/drivers/usb/dwc3/gadget.c
+@@ -2814,13 +2814,18 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
+ 	 * the run stop sequence, so avoid duplicate operations here.
+ 	 */
+ 	ret = pm_runtime_get_sync(dwc->dev);
+-	if (!ret || ret < 0) {
++	if (ret < 0) {
+ 		pm_runtime_put(dwc->dev);
+-		if (ret < 0)
+-			pm_runtime_set_suspended(dwc->dev);
++		pm_runtime_set_suspended(dwc->dev);
+ 		return ret;
+ 	}
+ 
++	/*
++	 * 0 means runtime resume ran. 1 means the controller was already
++	 * active, so resume did not run. Either way, if the pullup does
++	 * not match the request, apply it. Skipping on 0 left usb0 down
++	 * after a Type-C attach and stuck up after detach.
++	 */
+ 	if (dwc->pullups_connected == is_on) {
+ 		pm_runtime_put(dwc->dev);
+ 		return 0;

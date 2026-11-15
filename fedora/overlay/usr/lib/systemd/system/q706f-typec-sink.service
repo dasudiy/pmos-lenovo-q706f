@@ -1,0 +1,11 @@
+[Unit]
+Description=Prefer USB-C sink so a charger is accepted
+After=local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/device-lenovo-q706f/q706f-typec-sink.sh
+
+[Install]
+WantedBy=multi-user.target

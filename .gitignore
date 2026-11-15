@@ -1,5 +1,25 @@
 *.apk
+*.img
+*.rpm
+out/
+# Drop your own key here for image builds. Do not commit it.
+fedora/overlay/home/**/.ssh/authorized_keys
+linux-prepared/
 *.o
 *.ko
 *~
 .DS_Store
+# Per-device Bluetooth address. Commit only the .example file.
+fedora/overlay/etc/q706f-bt-addr
+
+# Local credentials and machine-specific overlay data.
+.env
+.env.*
+!.env.example
+fedora/overlay/home/**/.ssh/
+fedora/overlay/etc/NetworkManager/system-connections/*
+!fedora/overlay/etc/NetworkManager/system-connections/usb0.nmconnection
+# Local backups and diagnostic output.
+backup/
+backups/
+*.log

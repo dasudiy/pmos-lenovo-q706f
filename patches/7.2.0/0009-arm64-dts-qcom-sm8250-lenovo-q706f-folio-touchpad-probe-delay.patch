@@ -1,0 +1,18 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: delay folio touchpad HID probe
+
+Give the Elan 04F3:31F3 pogo touchpad time after vdd before i2c-hid
+reads the HID descriptor. The IC often returns zeros if probed too
+early; Android DTBO also ships preset descriptors as a backup.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -840,6 +840,7 @@
+ 		compatible = "hid-over-i2c";
+ 		vdd-supply = <&vreg_l10c_3p0>;
+ 		reg = <0x60>;
++		post-power-on-delay-ms = <300>;
+ 		hid-descr-addr = <0x01>;
+ 		interrupt-parent = <&tlmm>;
+ 		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;

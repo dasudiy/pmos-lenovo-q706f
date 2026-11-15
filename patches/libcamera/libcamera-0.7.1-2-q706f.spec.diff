@@ -1,0 +1,29 @@
+--- a/libcamera.spec	2026-10-13 08:36:28.784153548 +0000
++++ b/libcamera.spec	2026-10-13 08:36:29.116141720 +0000
+@@ -1,6 +1,6 @@
+ Name:    libcamera
+ Version: 0.7.1
+-Release: 2%{?dist}
++Release: 2.q706f1%{?dist}
+ Summary: A library to support complex camera ISPs
+ # see .reuse/dep5 and COPYING for details
+ License: LGPL-2.1-or-later
+@@ -12,6 +12,8 @@
+ Source3: 70-libcamera.rules
+ 
+ Patch01: 0001-disable-rpi-pisp.patch
++# Lenovo Q706F: OV8856 / OV13B10 sensor helpers and static properties
++Patch100: 0100-q706f-ov8856-ov13b10-sensor-helpers-and-properties.patch
+ 
+ # libcamera does not currently build on these architectures
+ ExcludeArch: s390x ppc64le
+@@ -202,6 +204,9 @@
+ %{python3_sitearch}/*
+ 
+ %changelog
++* Tue Oct 13 2026 asuka <asuka@lenovo-q706f> - 0.7.1-2.q706f1
++- Add OV8856 and OV13B10 camera sensor helpers and sensor properties (Lenovo Q706F)
++
+ * Wed Oct 07 2026 Milan Zamazal <mzamazal@redhat.com> - 0.7.1-2
+ - Fix IPA signing path (rhbz#2547048)
+ - Add libdw build dependency

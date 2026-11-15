@@ -1,10 +1,20 @@
-# postmarketOS fixes for Lenovo Q706F (Xiaoxin Pad Pro 12.6)
+# Linux on Lenovo Q706F (Xiaoxin Pad Pro 12.6)
 
-Patches and package overlays for running **postmarketOS** (systemd / GNOME, channel **v25.12**) on the **Lenovo Tab P12 Pro / Xiaoxin Pad Pro 12.6 (Q706F, SM8250)**.
+Kernel patches, device configuration, and distribution overlays for running **Fedora** and **postmarketOS** on the **Lenovo Tab P12 Pro / Xiaoxin Pad Pro 12.6 (Q706F, SM8250)**.
 
-Target kernel package: `linux-postmarketos-qcom-sm8250` **6.17.0** (community SM8250 tree), instead of the old device-specific `linux-lenovo-q706f` 6.11 package.
+Fedora and postmarketOS share the device enablement work in this repository. Distribution-specific build, packaging, and installation files stay separate.
 
-These changes were developed and verified on a real Q706F with USB-C DisplayPort Alt Mode (AOC 4K monitor), folio keyboard, Wi‑Fi, and speakers.
+## Start here
+
+| Goal | Guide |
+| --- | --- |
+| Build and run Fedora 44 Workstation with kernel 7.2.0 | [Fedora guide](docs/FEDORA.md) |
+| Apply the postmarketOS packages and kernel patches | [pmaports integration](docs/APPLY.md) |
+| Understand boot slots and preserve data during recovery | [Recovery notes](docs/RECOVERY.md) |
+
+The postmarketOS work targets the systemd / GNOME **v25.12** channel and the community `linux-postmarketos-qcom-sm8250` **6.17.0** package. Fedora uses the **7.2.0** kernel work. See each guide for its configuration and limitations; the status below does not imply identical behavior across both distributions.
+
+These changes were developed on a real Q706F with USB-C DisplayPort Alt Mode, folio keyboard, Wi-Fi, and speakers.
 
 ## Status summary
 
@@ -16,20 +26,25 @@ These changes were developed and verified on a real Q706F with USB-C DisplayPort
 | USB-C external display no signal | Fixed (Alt Mode + 4-lane DP) |
 | Only Dummy Output / no speakers | Fixed (CS35L45 + firmware symlink) |
 | ~90s boot delay waiting for RTC | Fixed (bogus systemd device wait removed) |
-| Brightness slider glitches the panel | Fixed (kernel `pkgrel` ≥ 10: patches 0005 + 0006) |
+| Brightness slider glitches the panel | Fixed (kernel `pkgrel` ≥ 11: patches 0005 + 0006) |
+| Fedora 44 Workstation on 7.2.0 | Boots to GNOME from Android `boot_b` + `userdata`. See [docs/FEDORA.md](docs/FEDORA.md) |
 
 ## Repository layout
 
 ```
-patches/                  Kernel patches + reference APKBUILD for linux-postmarketos-qcom-sm8250
-kernel-config/            Extra Kconfig options and full config diff vs upstream pmaports
+patches/                  Kernel patches + APKBUILD (6.17 and 7.2.0)
+patches/7.2.0/            Additional patches for kernel 7.2.0
+kernel-config/            Extra Kconfig + merged 7.2.0 config
 device-lenovo-q706f/      Device package overlays (cmdline, swclock, deviceinfo, APKBUILD)
 firmware-lenovo-q706f/    Cirrus firmware package APKBUILD (shared wmfw symlinks)
+fedora/                   Fedora 44 Workstation (kickstart, overlay, boot.img, flash scripts)
 scripts/                  Build/install helpers (pmbootstrap + SSH APK install)
-docs/                     Extra notes
+docs/APPLY.md             How to drop these files into pmaports
+docs/FEDORA.md            Kernel 7.2.0 and the Fedora image
+docs/RECOVERY.md          Boot slots, data preservation, and recovery notes
 ```
 
-Apply these files on top of [pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) (v25.12 / systemd channel), then rebuild with `pmbootstrap`.
+For postmarketOS, apply the relevant files on top of [pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) (v25.12 / systemd channel), then rebuild with `pmbootstrap`.
 
 ---
 
@@ -48,7 +63,9 @@ Apply these files on top of [pmaports](https://gitlab.postmarketos.org/postmarke
 - DTS patch: mark volume-up as `wakeup-source`  
   - `patches/0001-arm64-dts-qcom-sm8250-lenovo-q706f-vol-up-wakeup.patch`
 
-**Remaining:** folio keyboard/touchpad often fail i2c-HID resume (`failed to change power setting`, `-6`). Power / volume-up / hall still wake. True `deep` suspend-to-RAM is not advertised by this firmware (`/sys/power/mem_sleep` is only `[s2idle]`).
+**Remaining:** folio keyboard/touchpad often fail i2c-HID resume (`failed to change power setting`, `-6`). Power / volume-up / hall still wake. True `deep` suspend-to-RAM is not advertised (`/sys/power/mem_sleep` is only `[s2idle]`). SLPI sensor DSP still crashes on resume and may wake the SoC.
+
+USB gadget/host wakeup is disabled (`device-lenovo-q706f` **pkgrel ≥ 4**, udev `91-q706f-usb-nowakeup.rules`) so a connected PC on `usb0` should not resume s2idle.
 
 #### Sleep loops music while the screen is black
 
@@ -180,16 +197,17 @@ Late RTC probe (if any) is still handled by the udev rule.
 **Symptom:** Dragging the GNOME brightness slider (or writing sysfs backlight) produces garbled / flashing panel; prolonged dragging can end in a black screen while SSH still works.
 
 **Cause (two bugs):**
-1. **Panel driver:** `panel-samsung-amsa26zp01` rewrote WRCTRLD (`0x53`) on every backlight tick during live DSC video. Smooth dimming is already enabled once in the panel on-sequence (`0x53 = 0x28`).
+1. **Panel driver:** `panel-samsung-amsa26zp01` rewrote WRCTRLD (`0x53`) on every backlight tick during live DSC video.
 2. **MSM DSI host:** `msm_dsi_host_xfer_prepare()` unconditionally called `link_clk_set_rate()` on every runtime DCS write, re-locking the DSI PHY PLL mid-scanout. Kernel log shows `dsi_err_worker: status=5` (TIMEOUT | FIFO).
+3. **Idle restore (r10):** on-sequence `0x53 = 0x28` (smooth dimming) plus skipping same-value WRDISBV. GNOME idle-dim ramps down, then typing/touch writes the old level which the panel ignores; the slider still restores because it sends a new value.
 
 **Fix:**
-- `patches/0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch` — stop per-tick `0x53` writes; skip redundant WRDISBV; guard when panel is not prepared.
+- `patches/0005-drm-panel-samsung-amsa26zp01-fix-brightness-glitch.patch` — stop per-tick `0x53` writes; on-sequence `0x53 = 0x20` (smooth dimming off); always send WRDISBV while prepared.
 - `patches/0006-drm-msm-dsi-skip-link-clk-set-rate-on-runtime-cmd.patch` — skip `link_clk_set_rate()` when the DSI link is already up (`msm_host->power_on`).
 
 **Note:** Do **not** set `MIPI_DSI_MODE_LPM` or toggle LPM around brightness on this video-mode DSC panel — that left the panel black on boot (r9).
 
-**Verified:** `linux-postmarketos-qcom-sm8250` **6.17.0-r10** (`#11-postmarketos-qcom-sm8250`); GNOME brightness slider smooth, no glitches, no `dsi_err_worker` in `dmesg`.
+**Verified:** slider on **6.17.0-r10** (`#11-postmarketos-qcom-sm8250`) — smooth, no glitches, no `dsi_err_worker`. Idle undim needs **r11**.
 
 ---
 
@@ -234,12 +252,17 @@ scripts/install-kernel-ssh.sh
 
 5. Reboot. For DP: use a true **DP Alt Mode** cable/dock; start with 1080p if link training is flaky, then move to 4K once `num_lanes=4`.
 
+## Fedora 44 and kernel 7.2.0
+
+Fedora Workstation boots from an Android `boot.img` (kernel 7.2.0-r4 plus a dracut initramfs) and the `userdata` partition. Build and flash steps, the 7.2.0 patch list, and what is still missing (camera, the SMB1390 charge pump) are in [docs/FEDORA.md](docs/FEDORA.md). Apply the kernel onto pmaports with [docs/APPLY.md](docs/APPLY.md).
+
 ## Known remaining limitations
 
 - Hardware RTC is read-only (`RTC_SET_TIME` fails); rely on NTP + `swclock-offset`.
-- `CONFIG_BT_RFCOMM` is off in the community config → Bluetooth HFP / some classic profiles fail (`RFCOMM: Protocol not supported`).
+- `CONFIG_BT_RFCOMM` and `CONFIG_BT_BNEP` are modules in the 7.2.0 Q706F config. A kernel built from that config is required before HFP / PAN work.
 - Folio touchpad may log `i2c_hid` incorrect/incomplete reports (usually still usable).
 - Folio keyboard/touchpad may fail after suspend (`i2c_hid` power-setting `-6`); sleep is `s2idle` only (no `deep`).
+- SLPI (`5c00000.remoteproc`) may fatal-error on resume (`sensor_process` crash) and can still wake s2idle.
 - Early `a650_sqe.fw` load warning then succeeds from an alternate path.
 
 ## Upstream

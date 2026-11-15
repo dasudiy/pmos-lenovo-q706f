@@ -1,5 +1,5 @@
 --- /tmp/cfg-upstream	2026-07-25 09:31:44.415928053 +0800
-+++ /home/asuka/pmOS/cache_git/pmaports/device/community/linux-postmarketos-qcom-sm8250/config-postmarketos-qcom-sm8250.aarch64	2026-07-25 09:09:07.801978578 +0800
++++ b/device/community/linux-postmarketos-qcom-sm8250/config-postmarketos-qcom-sm8250.aarch64	2026-07-25 09:09:07.801978578 +0800
 @@ -4720,7 +4720,7 @@
  # CONFIG_DRM_PANEL_SAMSUNG_AMS639RQ08 is not set
  # CONFIG_DRM_PANEL_SAMSUNG_S6E88A0_AMS427AP24 is not set

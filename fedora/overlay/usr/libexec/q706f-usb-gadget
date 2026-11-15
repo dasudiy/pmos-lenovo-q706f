@@ -1,0 +1,54 @@
+#!/bin/sh
+# USB NCM gadget matching pmOS (Google 18d1:d001, usb0 = 172.16.42.1/16).
+set -u
+
+G=/sys/kernel/config/usb_gadget/g1
+
+modprobe configfs 2>/dev/null || true
+modprobe libcomposite 2>/dev/null || true
+modprobe usb_f_ncm 2>/dev/null || true
+modprobe usb_f_rndis 2>/dev/null || true
+
+if [ ! -d /sys/kernel/config/usb_gadget ]; then
+	mount -t configfs configfs /sys/kernel/config 2>/dev/null || true
+fi
+[ -d /sys/kernel/config/usb_gadget ] || exit 0
+
+if [ ! -d "$G" ]; then
+	mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" || exit 0
+	printf '0x18d1\n' > "$G/idVendor"
+	printf '0xd001\n' > "$G/idProduct"
+	printf 'Lenovo\n' > "$G/strings/0x409/manufacturer"
+	printf 'Lenovo Xiaoxin Pad Pro 12.6\n' > "$G/strings/0x409/product"
+	printf 'fedora-q706f\n' > "$G/strings/0x409/serialnumber"
+	printf 'USB network\n' > "$G/configs/c.1/strings/0x409/configuration"
+fi
+
+U=$(cat "$G/UDC" 2>/dev/null || true)
+[ -n "$U" ] && printf '\n' > "$G/UDC"
+
+fn=ncm.usb0
+if [ ! -d "$G/functions/$fn" ]; then
+	if ! mkdir "$G/functions/$fn" 2>/dev/null; then
+		fn=rndis.usb0
+		mkdir "$G/functions/$fn" 2>/dev/null || true
+	fi
+fi
+ln -sf "$G/functions/$fn" "$G/configs/c.1/" 2>/dev/null || true
+
+UDC=$(ls /sys/class/udc 2>/dev/null | head -1)
+[ -n "$UDC" ] && printf '%s\n' "$UDC" > "$G/UDC"
+
+i=0
+while [ "$i" -lt 30 ]; do
+	ifname=$(cat "$G/functions/$fn/ifname" 2>/dev/null || true)
+	[ -n "$ifname" ] && break
+	ifname=usb0
+	ip link show usb0 >/dev/null 2>&1 && break
+	i=$((i + 1))
+	sleep 1
+done
+ifname=${ifname:-usb0}
+ip link set "$ifname" up 2>/dev/null || true
+ip addr replace 172.16.42.1/16 dev "$ifname" 2>/dev/null || true
+exit 0

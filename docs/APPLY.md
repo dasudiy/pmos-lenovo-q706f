@@ -4,15 +4,31 @@
 
 | This repo | pmaports destination |
 | --- | --- |
-| `patches/000*.patch` | `device/community/linux-postmarketos-qcom-sm8250/` |
-| `patches/APKBUILD.linux-postmarketos-qcom-sm8250` | replace or merge into that package’s `APKBUILD` |
-| `kernel-config/q706f-extra.config` | merge into `config-postmarketos-qcom-sm8250.aarch64` |
+| `patches/000*.patch` | `device/community/linux-postmarketos-qcom-sm8250/` (6.17 series) |
+| `patches/APKBUILD.linux-postmarketos-qcom-sm8250` | replace or merge into that package’s `APKBUILD` (6.17) |
+| `patches/7.2.0/*.patch` | same package directory, instead of the 6.17 series, for 7.2.0 |
+| `patches/APKBUILD.linux-postmarketos-qcom-sm8250-7.2.0` | that package’s `APKBUILD` for 7.2.0-r4 |
+| `kernel-config/q706f-extra.config` | merge into the 6.17 `config-postmarketos-qcom-sm8250.aarch64` |
+| `kernel-config/config-postmarketos-qcom-sm8250-7.2.0.aarch64` | replace the kernel config for a 7.2.0 build |
 | `device-lenovo-q706f/*` | `device/testing/device-lenovo-q706f/` |
 | `firmware-lenovo-q706f/APKBUILD` | `device/testing/firmware-lenovo-q706f/APKBUILD` |
 
 Current package references:
-- Kernel: `linux-postmarketos-qcom-sm8250` **6.17.0-r10** (patches `0001`–`0006`)
-- Device: `device-lenovo-q706f` **8-r3** (sleep audio pause: ExecStartPre + `q706f-audio-blank`)
+- Kernel 6.17 (pmOS v25.12): `linux-postmarketos-qcom-sm8250` **6.17.0-r11** (`patches/0001`–`0006`)
+- Kernel 7.2.0: `patches/APKBUILD.linux-postmarketos-qcom-sm8250-7.2.0` **7.2.0-r4**, `patches/7.2.0/`, and `kernel-config/config-postmarketos-qcom-sm8250-7.2.0.aarch64`
+- Device: `device-lenovo-q706f` **8-r4** (sleep audio pause + USB wakeup disabled)
+
+## Kernel 7.2.0
+
+`0002` and `0003` are already in the `sm8250-7.2.0` tag. Copy the APKBUILD, the full config, and `patches/7.2.0/*.patch` into `device/community/linux-postmarketos-qcom-sm8250/`, then:
+
+```bash
+PMOS_WORK=/path/to/pmbootstrap-work fedora/scripts/apply-kernel-7.2-pmaports.sh
+```
+
+If this repo sits inside that work directory (`…/cache_git/pmaports` exists next to it), `PMOS_WORK` can be omitted. Install the resulting APK on a running postmarketOS system with `fedora/scripts/flash-kernel-pmos.sh` before replacing userdata.
+
+Fedora 44 uses that same kernel. Build, flash, and the bring-up notes are in [FEDORA.md](FEDORA.md). Keep a copy of the working `boot.img` before `fastboot flash boot_b`.
 
 ## Checksums
 
@@ -56,9 +72,9 @@ On device, `apk add` runs `mkinitfs` / `boot-deploy` and flashes `boot_b`. Reboo
 ## On-device verification snippets
 
 ```bash
-# Kernel build (brightness fix needs pkgrel >= 10)
+# Kernel build (brightness + idle undim needs pkgrel >= 11)
 uname -r
-# e.g. 6.17.0 #11-postmarketos-qcom-sm8250
+# e.g. 6.17.0 #12-postmarketos-qcom-sm8250
 
 # suspend / sleep default (s2idle only; no deep)
 cat /sys/power/mem_sleep
@@ -72,8 +88,10 @@ systemctl --user is-active q706f-audio-blank.service
 ls /usr/lib/systemd/system-sleep/q706f-suspend-audio.sh 2>/dev/null || echo 'system-sleep hook absent (ok)'
 # play music → short power press: speakers silent, no looping chunk
 # short power / volume-up wake: audio resumes, not stuck muted
-# journal tag on full suspend:
-journalctl -b -t q706f-audio --no-pager
+# USB must not wake s2idle (udev 91-q706f-usb-nowakeup.rules)
+cat /sys/devices/platform/soc@0/a6f8800.usb/power/wakeup
+cat /sys/devices/platform/soc@0/a6f8800.usb/a600000.usb/power/wakeup
+# expect: disabled
 
 # RTC + offset
 cat /sys/class/rtc/rtc0/since_epoch
@@ -91,7 +109,7 @@ cat /proc/asound/cards
 dmesg | grep cs35l45 | grep -E 'Firmware|Failed'
 pactl list short sinks
 
-# Brightness (11-bit panel, max 2047; drag GNOME slider — no glitch / black screen)
+# Brightness (11-bit panel, max 2047; slider + idle dim/undim — no glitch / black screen)
 ls /sys/class/backlight
 cat /sys/class/backlight/*/max_brightness
 cat /sys/class/drm/card0-DSI-1/status
@@ -100,7 +118,7 @@ cat /sys/class/drm/card0-DSI-1/enabled
 doas dmesg -w | grep -iE 'dsi_err|status=5'
 ```
 
-Single-step sysfs test (optional; should not corrupt the panel on r10+):
+Single-step sysfs test (optional; should not corrupt the panel on r11+):
 
 ```bash
 # echo 1024 | doas tee /sys/class/backlight/*/brightness

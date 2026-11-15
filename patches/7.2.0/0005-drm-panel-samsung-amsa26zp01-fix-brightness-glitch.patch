@@ -1,0 +1,48 @@
+From: Asuka <asuka@localhost>
+Subject: [PATCH] drm/panel: samsung-amsa26zp01: fix brightness glitch and idle restore
+
+Do not rewrite WRCTRLD (0x53) on every backlight tick. That DCS during
+live DSC video garbles the panel.
+
+Leave smooth dimming off (0x53 = 0x20) in the on-sequence. With 0x28 the
+panel ramps WRDISBV down for GNOME idle-dim, then ignores the later
+increase so typing/touch never restores; the slider still works because
+it writes a new value after the ramp is idle.
+
+Skip WRDISBV only when the panel is unprepared. ctx->panel.prepared is
+valid with both drm_panel_init (6.17) and devm_drm_panel_alloc (7.2.0).
+
+Do not set MIPI_DSI_MODE_LPM on this video-mode DSC panel: LP commands
+during active video can leave the panel black.
+
+---
+--- a/drivers/gpu/drm/panel/panel-samsung-amsa26zp01.c
++++ b/drivers/gpu/drm/panel/panel-samsung-amsa26zp01.c
+@@ -58,7 +58,8 @@
+ 	mipi_dsi_msleep(dsi_ctx, 50);
+ 	// #define SAMSUNG_BRIGHTNESS_MODE	0x53
+ 	// mipi_dsi_generic_write_seq_multi(dsi_ctx, SAMSUNG_BRIGHTNESS_MODE, 0xE0);
+-	mipi_dsi_generic_write_seq_multi(dsi_ctx, MIPI_DCS_WRITE_CONTROL_DISPLAY, 0x28);  /* 0x20:Normal mode + Smooth dimming off; 0x28: Normal mode + Smooth dimming on */
++	/* 0x20: BCTRL on, smooth dimming off so idle-undim WRDISBV applies immediately */
++	mipi_dsi_generic_write_seq_multi(dsi_ctx, MIPI_DCS_WRITE_CONTROL_DISPLAY, 0x20);
+ 	mipi_dsi_generic_write_seq_multi(dsi_ctx, 0xf8, 0x58, 0x00, 0x30, 0x35);
+ 	mipi_dsi_msleep(dsi_ctx, 100);
+ 	mipi_dsi_generic_write_seq_multi(dsi_ctx, 0xf9, 0xc0, 0x2b);
+@@ -172,12 +173,13 @@
+ static int samsung_amsa26zp01_bl_update_status(struct backlight_device *bl)
+ {
+ 	struct mipi_dsi_device *dsi = bl_get_data(bl);
++	struct samsung_amsa26zp01 *ctx = mipi_dsi_get_drvdata(dsi);
+ 	u16 brightness = backlight_get_brightness(bl);
+ 	int ret;
+-	// u8 payload_hbm_on[1] = { 0xE0 };	/* HBM Mode */
+-	// u8 payload_hbm_off[1] = { 0x28 }; /* 0x20:Normal mode + Smooth dimming off; 0x28: Normal mode + Smooth dimming on */
+-	struct mipi_dsi_multi_context dsi_ctx = { .dsi = dsi };
+-	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0x53, 0x28);
++
++	/* WRCTRLD during video-mode DSC scanout glitches the panel. */
++	if (!ctx->panel.prepared)
++		return 0;
+ 
+ 	ret = mipi_dsi_dcs_set_display_brightness(dsi, brightness);
+ 	if (ret < 0)

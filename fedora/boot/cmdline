@@ -1,0 +1,1 @@
+quiet splash mem_sleep_default=s2idle audit=0 systemd.firstboot=0 root=UUID=8a7c1e10-706f-4444-9a00-000000000001 rw rootwait cma=256M

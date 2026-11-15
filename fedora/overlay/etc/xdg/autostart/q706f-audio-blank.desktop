@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Q706F pause audio on blank
+Comment=Stop speaker DMA looping when the panel blanks
+Exec=/usr/lib/device-lenovo-q706f/q706f-audio-blank.sh
+OnlyShowIn=GNOME;
+X-GNOME-AutoRestart=true
+NoDisplay=true

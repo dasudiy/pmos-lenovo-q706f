@@ -1,0 +1,42 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: enable the PM8150B charger
+
+The SMB5 charger in PM8150B is left disabled, so the fuel gauge sees the
+PMIC's default path and GNOME has no charger supply. Android's PVT1
+battery profile (board-id 0x30d08, qcom,max-voltage-uv) is 4.49 V; the
+mainline driver programs the float voltage from voltage-max-design.
+
+Prefer sink on the dual-role connector so a charger is accepted without
+giving up host mode for a USB stick.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -40,6 +40,7 @@
+ 		energy-full-design-microwatt-hours = <39400000>;
+ 		charge-full-design-microamp-hours = <10200000>;
+ 		voltage-min-design-microvolt = <3870000>;
++		voltage-max-design-microvolt = <4490000>;
+ 	};
+ 
+ 	gpio-hall-sensor {
+@@ -981,6 +982,11 @@
+ 	};
+ };
+ 
++&pm8150b_charger {
++	monitored-battery = <&battery>;
++	status = "okay";
++};
++
+ &pm8150l_adc {
+ 	channel@4e {
+ 		reg = <ADC5_AMUX_THM2_100K_PU>;
+@@ -1103,6 +1109,7 @@
+ 		op-sink-microwatt = <10000000>;
+ 		power-role = "dual";
+ 		data-role = "dual";
++		try-power-role = "sink";
+ 		self-powered;
+ 
+ 		source-pdos = <PDO_FIXED(5000, 3000,

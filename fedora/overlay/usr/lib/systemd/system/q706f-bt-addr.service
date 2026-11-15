@@ -1,0 +1,16 @@
+[Unit]
+Description=Give the Q706F Bluetooth controller its factory public address
+After=local-fs.target bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# btmgmt waits out its full --timeout, so this takes ~9 s. Hooked to
+# bluetooth.service instead of multi-user.target so it no longer delays
+# boot; the address is still set right after bluetoothd comes up.
+TimeoutStartSec=90
+ExecStart=/usr/lib/device-lenovo-q706f/q706f-bt-addr.sh
+
+[Install]
+WantedBy=bluetooth.service

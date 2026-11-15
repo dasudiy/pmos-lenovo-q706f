@@ -1,0 +1,116 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: describe the OV13B10 rear camera
+
+The Android PVT DTBO puts the rear main camera on cam_cci0 master 0,
+CSIPHY0 (4 lanes), MCLK0 and PM8009 GPIO1 (CAM_REAR_RST). The CamX
+blob reports OV13B10 at 0x6c (7-bit 0x36). Supplies are PM8009 L7
+(DOVDD), L5 (AVDD) and L1 (DVDD).
+
+Android asks for 1.2 V on L1, an exact pmic5_nldo step; pin L1F there.
+Android drives MCLK0 at 24 MHz, but the mainline driver only supports
+19.2 MHz, which camcc can provide from the TCXO.
+
+The VCM and EEPROM are left out. Rotation follows Android
+(sensor-position-roll) and has not been checked on a frame yet.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -296,10 +296,14 @@
+ 			regulator-always-on;
+ 		};
+ 
++		/*
++		 * Rear camera DVDD (OV13B10). Android DTBO asks for 1.2 V,
++		 * which is an exact pmic5_nldo step (0.32 V + 110 * 8 mV).
++		 */
+ 		vreg_l1f_1p1: ldo1 {
+ 			regulator-name = "vreg_l1f_1p1";
+-			regulator-min-microvolt = <1104000>;
+-			regulator-max-microvolt = <1104000>;
++			regulator-min-microvolt = <1200000>;
++			regulator-max-microvolt = <1200000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+@@ -650,6 +654,16 @@
+ 	status = "okay";
+ 
+ 	ports {
++		/* Rear main camera: Android DTBO cam-sensor0 csiphy-sd-index = 0 */
++		port@0 {
++			csiphy0_ep: endpoint {
++				clock-lanes = <7>;
++				data-lanes = <0 1 2 3>;
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				remote-endpoint = <&ov13b10_rear_ep>;
++			};
++		};
++
+ 		/* Front camera: Android DTBO cam-sensor2 csiphy-sd-index = 2 */
+ 		port@2 {
+ 			csiphy2_ep: endpoint {
+@@ -662,6 +676,50 @@
+ 	};
+ };
+ 
++&cci0 {
++	status = "okay";
++};
++
++&cci0_i2c0 {
++	/* Android DTBO cam-sensor0: cam_cci0, cci-master 0 */
++	camera_rear: camera@36 {
++		compatible = "ovti,ov13b10";
++		reg = <0x36>;
++
++		/*
++		 * Android runs this sensor at 24 MHz, but the ov13b10 register
++		 * tables (PLL multiplier 0x0305 = 0xaf) are for 19.2 MHz and the
++		 * driver rejects any other rate. MCLK0 can do 19.2 MHz (TCXO).
++		 */
++		clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		clock-names = "xvclk";
++		assigned-clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		assigned-clock-rates = <19200000>;
++
++		/* PM8009 GPIO1, CAM_REAR_RST; SPMI GPIO specifiers are 1-based */
++		reset-gpios = <&pm8009_gpios 1 GPIO_ACTIVE_LOW>;
++
++		pinctrl-0 = <&cam_mclk0_default>, <&cam_rear_rst_default>;
++		pinctrl-names = "default";
++
++		dovdd-supply = <&vreg_l7f_1p8>;
++		avdd-supply = <&vreg_l5f_2p8>;
++		dvdd-supply = <&vreg_l1f_1p1>;
++
++		orientation = <1>; /* rear */
++		/* Android sensor-position-roll = 90; not checked on a frame yet */
++		rotation = <90>;
++
++		port {
++			ov13b10_rear_ep: endpoint {
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <560000000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
++	};
++};
++
+ &cci1 {
+ 	status = "okay";
+ };
+@@ -1104,6 +1162,12 @@
+ 		bias-disable;
+ 	};
+ 
++	cam_rear_rst_default: cam-rear-rst-default-state {
++		pins = "gpio1";
++		function = "normal";
++		bias-disable;
++	};
++
+ 	cam_front_rst_default: cam-front-rst-default-state {
+ 		pins = "gpio4";
+ 		function = "normal";

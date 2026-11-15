@@ -1,0 +1,22 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] arm64: dts: qcom: sm8250-lenovo-q706f: mux SPI13 CS as GPIO
+
+7.2 pinctrl refuses GPIO_39 when spi13's default pinctrl muxes it as
+qup13 while cs-gpios also claims it. Probe then fails with -EINVAL and
+the Goodix GT9916 SPI touchscreen never appears.
+
+Keep cs-gpios and mux the CS pin as GPIO (qup_spi13_cs_gpio), matching
+the unused state already in this DTS.
+
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-lenovo-q706f.dts
+@@ -1262,7 +1262,7 @@
+ &spi13 {
+ 	status = "okay";
+ 	pinctrl-names = "default";
+-	pinctrl-0 = <&qup_spi13_data_clk>, <&qup_spi13_cs>;
++	pinctrl-0 = <&qup_spi13_data_clk>, <&qup_spi13_cs_gpio>;
+ 	cs-gpios = <&tlmm 39 GPIO_ACTIVE_LOW>;
+ 
+ 	touchscreen@0 {

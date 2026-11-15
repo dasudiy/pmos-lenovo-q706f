@@ -1,0 +1,21 @@
+From: pmOS Q706F fixes
+Subject: [PATCH] power: bq27xxx: do not report full while discharging
+
+The Q706F gauge keeps the full-charge flag set at 100% after the
+USB-C cable is removed, while current is already negative. UPower
+then stays on the plugged-in full icon, so plug and unplug look
+the same.
+
+---
+--- a/drivers/power/supply/bq27xxx_battery.c
++++ b/drivers/power/supply/bq27xxx_battery.c
+@@ -1899,7 +1899,8 @@ static int bq27xxx_battery_current_and_status(
+ 		val_curr->intval = curr;
+ 
+ 	if (val_status) {
+-		if (bq27xxx_battery_is_full(di, flags))
++		/* FC stays set at 100% while the pack is discharging. */
++		if (bq27xxx_battery_is_full(di, flags) && curr >= 0)
+ 			val_status->intval = POWER_SUPPLY_STATUS_FULL;
+ 		else if (curr > 0)
+ 			val_status->intval = POWER_SUPPLY_STATUS_CHARGING;
